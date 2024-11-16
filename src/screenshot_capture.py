@@ -7,20 +7,31 @@ import subprocess
 import time
 import threading
 import pygetwindow as gw
+from datetime import datetime
+
+# Global variable to track if the chat reader is running
+chat_reader_running = False
+chat_reader_lock = threading.Lock()
 
 # Function to run the chat reader script asynchronously
 def run_chat_reader(image_path):
-    print(f"Starting chat reader for {image_path}...")
-    subprocess.call(['python', 'chat_reader.py', image_path])
-    print(f"Chat reader finished for {image_path}.")
+    global chat_reader_running
+    with chat_reader_lock:
+        if not chat_reader_running:
+            chat_reader_running = True
+            print(f"Starting chat reader for {image_path}...")
+            subprocess.call(['python', 'chat_reader.py', image_path])
+            print(f"Chat reader finished for {image_path}.")
+            chat_reader_running = False
 
 # Function to start chat reader with a delay
-def delayed_chat_reader(image_path, delay=1):
-    time.sleep(delay)  # Add delay before running the subprocess
+def delayed_chat_reader(image_path):
     run_chat_reader(image_path)
 
 # Function to perform the template detection and capture screenshots
 def detect_and_capture(outer_bounds, inner_bounds, threshold=0.5):
+    global chat_reader_running
+
     # Get the active window title
     active_window = gw.getActiveWindow()
     
@@ -62,13 +73,14 @@ def detect_and_capture(outer_bounds, inner_bounds, threshold=0.5):
 
             # Capture the inner area screenshot
             x1_inner, y1_inner, x2_inner, y2_inner = inner_bounds
-            inner_screenshot = pyautogui.screenshot(region=(x1_inner, y1_inner, x2_inner - x1_inner, y2_inner - y1_inner))
+            inner_screenshot = pyautogui.screenshot(region=(x1_inner, y1_inner, x2_inner - x1_inner, y2_inner - y1_inner ))
 
             # Convert to a format usable by OpenCV
             inner_screenshot_np = np.array(inner_screenshot)
 
-            # Save the screenshot
-            image_path = 'screenshots/inner_area_screenshot.png'
+            # Generate a unique filename using the current timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            image_path = f'screenshots/inner_area_screenshot_{timestamp}.png'
             cv2.imwrite(image_path, cv2.cvtColor(inner_screenshot_np, cv2.COLOR_RGB2BGR))
             print(f"Inner area screenshot saved as '{image_path}'.")
 
@@ -88,6 +100,6 @@ inner_bounds = list(map(int, sys.argv[2].split(',')))
 try:
     while True:
         detect_and_capture(outer_bounds, inner_bounds, threshold=0.5)
-        time.sleep(1)  # Wait for 1 second before the next iteration
+        time.sleep(5)  # Wait for 5 second before the next iteration
 except KeyboardInterrupt:
     print("Script terminated by user.")
